@@ -37,9 +37,17 @@ from specs.stdapi import API
 from specs.glapi import glapi
 from specs.eglapi import eglapi
 from specs.glesapi import glesapi
+import sys
 
 
 class EglTracer(GlTracer):
+
+    def __init__(self, isAndroid):
+        self.isAndroid = isAndroid
+        GlTracer.__init__(self)
+
+    def manualTracking(self):
+        return self.isAndroid
 
     def isFunctionPublic(self, function):
         # The symbols visible in libEGL.so can vary, so expose them all
@@ -100,7 +108,8 @@ if __name__ == '__main__':
     api.addApi(eglapi)
     api.addApi(glapi)
     api.addApi(glesapi)
-    tracer = EglTracer()
+    is_android = "--android" in sys.argv
+    tracer = EglTracer(is_android)
     tracer.traceApi(api)
 
     print r'''

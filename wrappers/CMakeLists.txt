@@ -357,9 +357,12 @@ endif ()
 
 if (ENABLE_EGL AND NOT WIN32 AND NOT APPLE)
     # libEGL.so/libGL.so
+    if (ANDROID)
+        set (egltrace_opts "--android")
+    endif ()
     add_custom_command (
         OUTPUT egltrace.cpp
-        COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/egltrace.py > ${CMAKE_CURRENT_BINARY_DIR}/egltrace.cpp
+        COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/egltrace.py ${egltrace_opts} > ${CMAKE_CURRENT_BINARY_DIR}/egltrace.cpp
         DEPENDS
             egltrace.py
             gltrace.py
