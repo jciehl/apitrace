@@ -330,6 +330,14 @@ _glDrawArrays_count(GLint first, GLsizei count)
 
 #define _glDrawArraysEXT_count _glDrawArrays_count
 
+/* Forward declarations for definitions in gltrace.py */
+void
+_apitrace_glGetIntegerv(GLenum pname, GLint *params);
+
+void
+_apitrace_glGetBufferSubData(GLenum target, GLintptr offset, GLsizeiptr size,
+                              GLvoid *data);
+
 static inline GLuint
 _glDrawElementsBaseVertex_count(GLsizei count, GLenum type, const GLvoid *indices, GLint basevertex)
 {
@@ -340,7 +348,8 @@ _glDrawElementsBaseVertex_count(GLsizei count, GLenum type, const GLvoid *indice
         return 0;
     }
 
-    _glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &element_array_buffer);
+    _apitrace_glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING,
+                                      &element_array_buffer);
     if (element_array_buffer) {
         // Read indices from index buffer object
         GLintptr offset = (GLintptr)indices;
@@ -350,7 +359,8 @@ _glDrawElementsBaseVertex_count(GLsizei count, GLenum type, const GLvoid *indice
             return 0;
         }
         memset(temp, 0, size);
-        _glGetBufferSubData(GL_ELEMENT_ARRAY_BUFFER, offset, size, temp);
+        _apitrace_glGetBufferSubData(GL_ELEMENT_ARRAY_BUFFER, offset,
+                                               size, temp);
         indices = temp;
     } else {
         if (!indices) {

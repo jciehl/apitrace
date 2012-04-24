@@ -181,9 +181,9 @@ class GlTracer(Tracer):
             print '    // %s' % function_name
             print '  if (%s) {' % profile_check
             self.array_prolog(api, uppercase_name)
-            print '    if (_glIsEnabled(%s)) {' % enable_name
+            print '    if (_apitrace_glIsEnabled(%s)) {' % enable_name
             print '        GLint _binding = 0;'
-            print '        _glGetIntegerv(%s, &_binding);' % binding_name
+            print '        _apitrace_glGetIntegerv(%s, &_binding);' % binding_name
             print '        if (!_binding) {'
             self.array_cleanup(api, uppercase_name)
             print '            return true;'
@@ -680,7 +680,7 @@ class GlTracer(Tracer):
         # Defer tracing of user array pointers...
         if function.name in self.array_pointer_function_names:
             print '    GLint _array_buffer = 0;'
-            print '    _glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &_array_buffer);'
+            print '    _apitrace_glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &_array_buffer);'
             print '    if (!_array_buffer) {'
             print '        gltrace::Context *ctx = gltrace::getContext();'
             print '        ctx->user_arrays = true;'
@@ -1023,7 +1023,7 @@ class GlTracer(Tracer):
     def serializeArgValue(self, function, arg):
         if function.name in self.draw_function_names and arg.name == 'indices':
             print '    GLint _element_array_buffer = 0;'
-            print '    _glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &_element_array_buffer);'
+            print '    _apitrace_glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &_element_array_buffer);'
             print '    if (!_element_array_buffer) {'
             if isinstance(arg.type, stdapi.Array):
                 print '        trace::localWriter.beginArray(%s);' % arg.type.length
@@ -1049,7 +1049,7 @@ class GlTracer(Tracer):
             print '        gltrace::Context *ctx = gltrace::getContext();'
             print '        GLint _unpack_buffer = 0;'
             print '        if (ctx->profile == gltrace::PROFILE_COMPAT)'
-            print '            _glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &_unpack_buffer);'
+            print '            _apitrace_glGetIntegerv(GL_PIXEL_UNPACK_BUFFER_BINDING, &_unpack_buffer);'
             print '        if (_unpack_buffer) {'
             print '            trace::localWriter.writePointer((uintptr_t)%s);' % arg.name
             print '        } else {'
@@ -1099,15 +1099,15 @@ class GlTracer(Tracer):
             print '  if (%s) {' % profile_check
             self.array_trace_prolog(api, uppercase_name)
             self.array_prolog(api, uppercase_name)
-            print '    if (_glIsEnabled(%s)) {' % enable_name
+            print '    if (_apitrace_glIsEnabled(%s)) {' % enable_name
             print '        GLint _binding = 0;'
-            print '        _glGetIntegerv(%s, &_binding);' % binding_name
+            print '        _apitrace_glGetIntegerv(%s, &_binding);' % binding_name
             print '        if (!_binding) {'
 
             # Get the arguments via glGet*
             for arg in function.args:
                 arg_get_enum = 'GL_%s_ARRAY_%s' % (uppercase_name, arg.name.upper())
-                arg_get_function, arg_type = TypeGetter().visit(arg.type)
+                arg_get_function, arg_type = TypeGetterManualTracking().visit(arg.type)
                 print '            %s %s = 0;' % (arg_type, arg.name)
                 print '            _%s(%s, &%s);' % (arg_get_function, arg_get_enum, arg.name)
             
@@ -1224,7 +1224,7 @@ class GlTracer(Tracer):
     def array_prolog(self, api, uppercase_name):
         if uppercase_name == 'TEXTURE_COORD':
             print '    GLint client_active_texture = 0;'
-            print '    _glGetIntegerv(GL_CLIENT_ACTIVE_TEXTURE, &client_active_texture);'
+            print '    _apitrace_glGetIntegerv(GL_CLIENT_ACTIVE_TEXTURE, &client_active_texture);'
             print '    GLint max_texture_coords = 0;'
             print '    if (ctx->profile == gltrace::PROFILE_COMPAT)'
             print '        _glGetIntegerv(GL_MAX_TEXTURE_COORDS, &max_texture_coords);'
