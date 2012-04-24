@@ -28,6 +28,8 @@
 
 
 #include "glimports.hpp"
+#include <map>
+#include <set>
 
 
 namespace gltrace {
@@ -39,6 +41,11 @@ enum Profile {
     PROFILE_ES2,
 };
 
+struct gl_buffer {
+	size_t size;
+	void *data;
+};
+
 class Context {
 public:
     enum Profile profile;
@@ -46,6 +53,11 @@ public:
     bool user_arrays_arb;
     bool user_arrays_nv;
     unsigned retain_count;
+    std::map <GLuint, GLuint> bindings;
+    std::map <GLuint, struct gl_buffer *> buffers;
+    std::set <GLenum> enabled_caps;
+    std::map <GLenum, const GLvoid *> pointers;
+    std::map <GLenum, GLuint> integers;
 
     Context(void) :
         profile(PROFILE_COMPAT),
