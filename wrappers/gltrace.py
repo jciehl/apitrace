@@ -90,6 +90,23 @@ class TypeGetter(stdapi.Visitor):
     def visitOpaque(self, pointer):
         return self.prefix + 'Pointerv' + self.ext_suffix, 'GLvoid *'
 
+class TypeGetterManualTracking(TypeGetter):
+    def manualTrackingFunctionName(self, function_name):
+        return 'apitrace_' + function_name
+
+    def visitAlias(self, alias):
+        function_name, arg_type = TypeGetter.visitAlias(self, alias)
+        # We don't support yet the rest of the types
+        if alias.expr in ('GLint', 'GLuint', 'GLsizei'):
+            function_name = self.manualTrackingFunctionName(function_name)
+
+        return function_name, arg_type
+
+    def visitOpaque(self, pointer):
+        function_name, arg_type = TypeGetter.visitOpaque(self, pointer)
+        function_name = self.manualTrackingFunctionName(function_name)
+
+        return function_name, arg_type
 
 class GlTracer(Tracer):
 
@@ -140,6 +157,8 @@ class GlTracer(Tracer):
         print '    return VERTEX_ATTRIB;'
         print '}'
         print
+
+        self.defineManualTrackingHelpers()
 
         # Whether we need user arrays
         print 'static inline bool _need_user_arrays(void)'
@@ -351,6 +370,73 @@ class GlTracer(Tracer):
 
     def manualTracking(self):
         return False
+
+    def defineManualTrackingHelpers(self):
+        print 'void _apitrace_glGetIntegerv(GLenum pname, GLint *params)'
+        print '{'
+        if self.manualTracking():
+            print '    gltrace::Context *ctx = gltrace::getContext();'
+            print
+            print '    if (ctx->integers.find(pname) != ctx->integers.end())'
+            print '        *params = ctx->integers[pname];'
+            print '    else if (pname == GL_CLIENT_ACTIVE_TEXTURE)'
+            print '        *params = GL_TEXTURE0;'
+            print '    else'
+            print '        _glGetIntegerv(pname, params);'
+        else:
+            print '    _glGetIntegerv(pname, params);'
+        print '}'
+        print
+
+        print 'static GLboolean _apitrace_glIsEnabled(GLenum cap)'
+        print '{'
+        if self.manualTracking():
+            print '    gltrace::Context *ctx = gltrace::getContext();'
+            print '    std::set <GLenum> *caps = &ctx->enabled_caps;'
+            print
+            print '    if (caps->find(cap) != caps->end())'
+            print '        return true;'
+            print '    else'
+            print '        return _glIsEnabled(cap);'
+        else:
+            print '    return _glIsEnabled(cap);'
+        print '}'
+        print
+
+        print 'static void _apitrace_glGetPointerv(GLenum pname, GLvoid **params)'
+        print '{'
+        if self.manualTracking():
+            print '    gltrace::Context *ctx = gltrace::getContext();'
+            print '    *params = (void *)ctx->pointers[pname];'
+        else:
+            print '    return _glGetPointerv(pname, params);'
+        print '}'
+        print
+
+        print 'void _apitrace_glGetBufferSubData(GLenum target,'
+        print '                                          GLintptr offset,'
+        print '                                          GLsizeiptr size,'
+        print '                                          GLvoid *data)'
+        print '{'
+        if self.manualTracking():
+            print '    if (target != GL_ELEMENT_ARRAY_BUFFER) {'
+            print '        glGetBufferSubData(target, offset, size, data);'
+            print '        return;'
+            print '    }'
+            print '    struct gltrace::Context *ctx = gltrace::getContext();'
+            print '    struct gltrace::gl_buffer *buf;'
+            print '    GLint buf_id;'
+            print
+            print '    _apitrace_glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING,'
+            print '                             &buf_id);'
+            print '    assert(buf_id == ctx->bindings[GL_ELEMENT_ARRAY_BUFFER]);'
+            print '    buf = ctx->buffers[buf_id];'
+            print '    assert(size + offset <= buf->size);'
+            print '    memcpy(data, (uint8_t *)buf->data + offset, size);'
+        else:
+            print '    glGetBufferSubData(target, offset, size, data);'
+        print '}'
+        print
 
     def manualTrackingProlog(self, function):
         if function.name == 'glBindBuffer':
