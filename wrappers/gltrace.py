@@ -349,6 +349,165 @@ class GlTracer(Tracer):
         else:
             Tracer.traceApi(self, api)
 
+    def manualTracking(self):
+        return False
+
+    def manualTrackingProlog(self, function):
+        if function.name == 'glBindBuffer':
+            print '    gltrace::Context *ctx = gltrace::getContext();'
+            print '    ctx->bindings[target] = buffer;'
+            print '    switch (target) {'
+            print '        case GL_ARRAY_BUFFER:'
+            print '            ctx->integers[GL_ARRAY_BUFFER_BINDING] = buffer;'
+            print '            break;'
+            print '        case GL_ELEMENT_ARRAY_BUFFER:'
+            print '            ctx->integers[GL_ELEMENT_ARRAY_BUFFER_BINDING] = buffer;'
+            print '            break;'
+            print '        case GL_PIXEL_UNPACK_BUFFER:'
+            print '            ctx->integers[GL_PIXEL_UNPACK_BUFFER_BINDING] = buffer;'
+            print '            break;'
+            print '    }'
+            print
+
+        if function.name == 'glBufferData':
+            print '    if (target == GL_ELEMENT_ARRAY_BUFFER) {'
+            print '        gltrace::Context *ctx = gltrace::getContext();'
+            print '        unsigned long buf_id = ctx->bindings[target];'
+            print '        struct gltrace::gl_buffer *buf;'
+            print '        if (ctx->buffers.find(buf_id) != ctx->buffers.end()) {'
+            print '            buf = ctx->buffers[buf_id];'
+            print '        } else {'
+            print '            buf = (struct gltrace::gl_buffer *)calloc(1, sizeof(*buf));'
+            print '            ctx->buffers[buf_id] = buf;'
+            print '        }'
+            print '        if (data) {'
+            print '            buf->data = realloc(buf->data, size);'
+            print '            buf->size = size;'
+            print '            memcpy(buf->data, data, size);'
+            print '        } else {'
+            print '            buf->size = 0;'
+            print '            free(buf->data);'
+            print '            buf->data = NULL;'
+            print '        }'
+            print '    }'
+            print
+
+        if function.name == 'glBufferSubData':
+            print '    if (target == GL_ELEMENT_ARRAY_BUFFER) {'
+            print '        gltrace::Context *ctx = gltrace::getContext();'
+            print '        struct gltrace::gl_buffer *buf;'
+            print '        unsigned long buf_id = ctx->bindings[target];'
+            print '        buf = ctx->buffers[buf_id];'
+            print '        memcpy((uint8_t *)buf->data + offset, data, size);'
+            print '    }'
+            print
+
+        if function.name == 'glDeleteBuffers':
+            print '    gltrace::Context *ctx = gltrace::getContext();'
+            print
+            print '    while (n) {'
+            print '        unsigned long buf_id;'
+            print '        struct gltrace::gl_buffer *buf;'
+            print '        n--;'
+            print '        buf_id = buffer[n];'
+            print '        buf = ctx->buffers[buf_id];'
+            print '        if (buf) {'
+            print '            free(buf->data);'
+            print '            free(buf);'
+            print '            ctx->buffers.erase(buf_id);'
+            print '            std::map <GLuint, GLuint>::iterator b;'
+            print
+            print '            b = ctx->bindings.begin();'
+            print '            while (b != ctx->bindings.end()) {'
+            print '                if (b->second != buf_id) {'
+            print '                    b++;'
+            print '                    continue;'
+            print '                }'
+            print '                ctx->bindings.erase(b++);'
+            print '                std::map <GLenum, GLuint>::iterator i;'
+            print '                i = ctx->integers.begin();'
+            print '                while (i != ctx->integers.end()) {'
+            print '                    if (i->second != buf_id) {'
+            print '                        i++;'
+            print '                        continue;'
+            print '                    }'
+            print
+            print '                    switch (i->first) {'
+            for i in ['', 'ELEMENT_', 'VERTEX_', 'NORMAL_', 'COLOR_', 'INDEX_', 'TEXTURE_COORD_', 'EDGE_FLAG_', 'FOG_COORD_', 'SECONDARY_COLOR_']:
+                print '                    case GL_%sARRAY_BUFFER_BINDING:' % i
+            print '                        ctx->integers.erase(i++);'
+            print '                        break;'
+            print '                     }'
+            print '                }'
+            print '            }'
+            print '        }'
+            print '    }'
+
+        if function.name == 'glEnable':
+            print '    gltrace::Context *ctx = gltrace::getContext();'
+            print '    std::set <GLenum> *caps = &ctx->enabled_caps;'
+            print
+            # We don't care if the cap is valid here. We anyway use our own
+            # set of enabled caps for known-good values only. The traced
+            # application itself will use the native glIsEnabled instead (if
+            # it's supported.
+            print '    caps->insert(cap);'
+
+        if function.name == 'glEnableClientState':
+            print '    gltrace::Context *ctx = gltrace::getContext();'
+            print '    std::set <GLenum> *caps = &ctx->enabled_caps;'
+            print
+            # We don't care if the cap is valid here. We anyway use our own
+            # set of enabled caps for known-good values only. The traced
+            # application itself will use the native glIsEnabled instead (if
+            # it's supported.
+            print '    caps->insert(array);'
+
+        if function.name == 'glDisable':
+            print '    gltrace::Context *ctx = gltrace::getContext();'
+            print '    std::set <GLenum> *caps = &ctx->enabled_caps;'
+            print
+            print '    caps->erase(cap);'
+
+        if function.name == 'glDisableClientState':
+            print '    gltrace::Context *ctx = gltrace::getContext();'
+            print '    std::set <GLenum> *caps = &ctx->enabled_caps;'
+            print
+            print '    caps->erase(array);'
+
+        if function.name == 'glClientActiveTexture':
+            print '    gltrace::Context *ctx = gltrace::getContext();'
+            print
+            print '    ctx->integers[GL_CLIENT_ACTIVE_TEXTURE] = texture;'
+
+        pointer_functions = {
+                'glVertexPointer': 'GL_VERTEX_ARRAY',
+                'glVertexPointerBounds': 'GL_VERTEX_ARRAY',
+                'glTexCoordPointer': 'GL_TEXTURE_COORD_ARRAY',
+                'glTexCoordPointerBounds': 'GL_TEXTURE_COORD_ARRAY',
+                'glNormalPointer': 'GL_NORMAL_ARRAY',
+                'glNormalPointerBounds': 'GL_NORMAL_ARRAY',
+                'glColorPointer': 'GL_COLOR_ARRAY',
+                'glColorPointerBounds': 'GL_COLOR_ARRAY',
+        }
+
+        if function.name in pointer_functions:
+            print '    gltrace::Context *ctx = gltrace::getContext();'
+            print '    GLuint binding;'
+            array_name = pointer_functions[function.name]
+            if function.name not in ['glNormalPointer', 'glNormalPointerBounds']:
+                print '    ctx->integers[%s_SIZE] = size;' % array_name
+            print '    ctx->integers[%s_STRIDE] = stride;' % array_name
+            print '    ctx->integers[%s_TYPE] = type;' % array_name
+            print '    ctx->pointers[%s_POINTER] = pointer;' % array_name
+            print '    if (ctx->bindings.find(GL_ARRAY_BUFFER) != '
+            print '        ctx->bindings.end())'
+            print '        binding = ctx->bindings[GL_ARRAY_BUFFER];'
+            print '    else'
+            print '        binding = 0;'
+            print '    ctx->integers[%s_BUFFER_BINDING] = binding;' % array_name
+            print
+
     array_pointer_function_names = set((
         "glVertexPointer",
         "glNormalPointer",
@@ -429,6 +588,9 @@ class GlTracer(Tracer):
     ]
 
     def traceFunctionImplBody(self, function):
+        if self.manualTracking():
+            self.manualTrackingProlog(function)
+
         # Defer tracing of user array pointers...
         if function.name in self.array_pointer_function_names:
             print '    GLint _array_buffer = 0;'
