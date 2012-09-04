@@ -176,14 +176,14 @@ callFlagTable[] = {
     { "glXQueryExtension",                             CALL_FLAG_NO_SIDE_EFFECTS | CALL_FLAG_VERBOSE },
     { "glXQueryExtensionsString",                      CALL_FLAG_NO_SIDE_EFFECTS | CALL_FLAG_VERBOSE },
     { "glXQueryVersion",                               CALL_FLAG_NO_SIDE_EFFECTS | CALL_FLAG_VERBOSE },
-    { "glXSwapBuffers",                                CALL_FLAG_SWAPBUFFERS },
+    { "glXSwapBuffers",                                CALL_FLAG_RENDER | CALL_FLAG_SWAPBUFFERS},
     { "wglGetCurrentContext",                          CALL_FLAG_NO_SIDE_EFFECTS | CALL_FLAG_VERBOSE },
     { "wglGetCurrentDC",                               CALL_FLAG_NO_SIDE_EFFECTS | CALL_FLAG_VERBOSE },
     { "wglGetDefaultProcAddress",                      CALL_FLAG_NO_SIDE_EFFECTS | CALL_FLAG_VERBOSE },
     { "wglGetProcAddress",                             CALL_FLAG_NO_SIDE_EFFECTS | CALL_FLAG_VERBOSE },
-    { "wglSwapBuffers",                                CALL_FLAG_SWAPBUFFERS },
-    { "wglSwapLayerBuffers",                           CALL_FLAG_SWAPBUFFERS },
-    { "wglSwapMultipleBuffers",                        CALL_FLAG_SWAPBUFFERS },
+    { "wglSwapBuffers",                                CALL_FLAG_RENDER | CALL_FLAG_SWAPBUFFERS },
+    { "wglSwapLayerBuffers",                           CALL_FLAG_RENDER | CALL_FLAG_SWAPBUFFERS },
+    { "wglSwapMultipleBuffers",                        CALL_FLAG_RENDER | CALL_FLAG_SWAPBUFFERS },
     // NOTE: New entries must be sorted alphabetically
 };
 
