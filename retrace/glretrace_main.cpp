@@ -25,6 +25,7 @@
 
 
 #include <string.h>
+#include <unistd.h>
 
 #include "retrace.hpp"
 #include "glproc.hpp"
@@ -435,6 +436,7 @@ retrace::flushRendering(void) {
 void
 retrace::waitForInput(void) {
     while (glws::processEvents()) {
+        usleep(100000);
     }
 }
 
