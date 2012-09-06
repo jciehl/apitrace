@@ -32,13 +32,16 @@
 
 
 #if defined(_WIN32)
-#include <windows.h>
-#elif defined(__linux__)
-#include <time.h>
-#elif defined(__APPLE__)
-#include <mach/mach_time.h>
+#  include <windows.h>
 #else
-#include <sys/time.h>
+#  if defined(__linux__)
+#    include <time.h>
+#  elif defined(__APPLE__)
+#    include <mach/mach_time.h>
+#  else
+#    include <sys/time.h>
+#  endif
+#  include <unistd.h> /* usleep */
 #endif
 
 
@@ -85,6 +88,16 @@ namespace os {
         struct timeval tv;
         gettimeofday(&tv, NULL);
         return tv.tv_sec * 1000000LL + tv.tv_usec;
+#endif
+    }
+
+    // sleep
+    inline void
+    sleep(long long usecs) {
+#if defined(_WIN32)
+        Sleep((usecs + 999) / 1000);
+#else
+        usleep(usecs);
 #endif
     }
 
