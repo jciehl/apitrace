@@ -34,6 +34,8 @@
 #include "trace_dump.hpp"
 #include "retrace.hpp"
 
+#include "retrace_pipelineview.hpp"
+
 
 static bool waitOnFinish = false;
 
@@ -46,7 +48,6 @@ static unsigned dumpStateCallNo = ~0;
 
 
 namespace retrace {
-
 
 trace::Parser parser;
 trace::Profiler profiler;
@@ -66,6 +67,9 @@ bool profilingPixelsDrawn = false;
 
 unsigned frameNo = 0;
 unsigned callNo = 0;
+
+bool dumpingPipeline= false;
+unsigned dumpPipelineCallNo= ~0;
 
 
 void
@@ -160,6 +164,13 @@ mainLoop() {
             takeSnapshot(call->no);
         }
 
+        if(dumpingPipeline && 
+            call->no >= dumpPipelineCallNo && 
+            (call->flags & trace::CALL_FLAG_RENDER)) {
+            pipelineView(call);
+            exit(0);
+        }
+        
         if (call->no >= dumpStateCallNo &&
             dumpState(std::cout)) {
             exit(0);
@@ -211,6 +222,7 @@ usage(const char *argv0) {
         "  -S CALLSET   calls to snapshot (default is every frame)\n"
         "  -v           increase output verbosity\n"
         "  -D CALLNO    dump state at specific call no\n"
+        "  -P CALLNO    snapshot pipeline stages at specific call no\n" 
         "  -w           waitOnFinish on final frame\n";
 }
 
@@ -247,9 +259,24 @@ int main(int argc, char **argv)
                 comparePrefix = "";
             }
         } else if (!strcmp(arg, "-D")) {
-            dumpStateCallNo = atoi(argv[++i]);
-            dumpingState = true;
+            //~ dumpStateCallNo = atoi(argv[++i]);
+            //~ dumpingState = true;
+            //~ retrace::verbosity = -2;
+            
+            // temporary, view pipeline thumbnails in the gui
+            dumpPipelineCallNo = atoi(argv[++i]);
+            dumpingPipeline = true;
             retrace::verbosity = -2;
+            
+            std::cerr << "dump pipeline stages at call " << dumpPipelineCallNo << "\n";
+            
+        } else if (!strcmp(arg, "-P")) {
+            dumpPipelineCallNo = atoi(argv[++i]);
+            dumpingPipeline = true;
+            retrace::verbosity = -2;
+            
+            std::cerr << "dump pipeline stages at call " << dumpPipelineCallNo << "\n";
+            
         } else if (!strcmp(arg, "-core")) {
             retrace::coreProfile = true;
         } else if (!strcmp(arg, "-db")) {
