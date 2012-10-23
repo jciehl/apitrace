@@ -287,9 +287,13 @@ void Retracer::run()
     }
 
     if (m_captureState) {
+        qDebug() << "capture state";
+        
         arguments << QLatin1String("-D");
         arguments << QString::number(m_captureCall);
     } else if (m_captureThumbnails) {
+        qDebug() << "capture thumbnails/pipeline";
+
         arguments << QLatin1String("-s"); // emit snapshots
         arguments << QLatin1String("-"); // emit to stdout
     } else if (isProfiling()) {
@@ -399,7 +403,7 @@ void Retracer::run()
                     break;
                 }
 
-                // qDebug() << "channels: " << channels << ", width: " << width << ", height: " << height";
+                qDebug() << "channels: " << channels << ", width: " << width << ", height: " << height;
 
                 QImage snapshot = QImage(width, height, channels == 1 ? QImage::Format_Mono : QImage::Format_RGB888);
 

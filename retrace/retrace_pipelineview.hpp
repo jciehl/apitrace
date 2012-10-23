@@ -4,7 +4,7 @@
 
 namespace retrace {
     
-void pipelineView(trace::Call *call);
+void pipelineView( trace::Call *call, std::ostream& os );
 
 }
 

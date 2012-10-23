@@ -167,7 +167,7 @@ mainLoop() {
         if(dumpingPipeline && 
             call->no >= dumpPipelineCallNo && 
             (call->flags & trace::CALL_FLAG_RENDER)) {
-            pipelineView(call);
+            pipelineView(call, std::cout);
             exit(0);
         }
         
@@ -259,16 +259,16 @@ int main(int argc, char **argv)
                 comparePrefix = "";
             }
         } else if (!strcmp(arg, "-D")) {
-            //~ dumpStateCallNo = atoi(argv[++i]);
-            //~ dumpingState = true;
-            //~ retrace::verbosity = -2;
-            
-            // temporary, view pipeline thumbnails in the gui
-            dumpPipelineCallNo = atoi(argv[++i]);
-            dumpingPipeline = true;
+            dumpStateCallNo = atoi(argv[++i]);
+            dumpingState = true;
             retrace::verbosity = -2;
             
-            std::cerr << "dump pipeline stages at call " << dumpPipelineCallNo << "\n";
+            //~ // temporary, view pipeline thumbnails in the gui
+            //~ dumpPipelineCallNo = atoi(argv[++i]);
+            //~ dumpingPipeline = true;
+            //~ retrace::verbosity = -2;
+            
+            //~ std::cerr << "dump pipeline stages at call " << dumpPipelineCallNo << "\n";
             
         } else if (!strcmp(arg, "-P")) {
             dumpPipelineCallNo = atoi(argv[++i]);

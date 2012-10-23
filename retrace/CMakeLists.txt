@@ -54,6 +54,7 @@ add_library (glretrace_common
     glretrace_main.cpp
     glretrace_ws.cpp
     glretrace_pipelineview.cpp
+    glretrace_pipeline_shaders.cpp
     glstate.cpp
     glstate_images.cpp
     glstate_params.cpp
