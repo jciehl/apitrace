@@ -306,7 +306,6 @@ int getActiveBuffers( ) {
         
         if(buffer != 0) {
             if(activeProgram != 0) {
-                //! \todo use os::log
                 os::log("    attribute %d '%s': vertex buffer object %d, enabled %d, item size %d, item type 0x%x, stride %d, offset %lu\n", 
                     i, &activeAttributes[i].name.front(), 
                     buffer, enabled, size, type, stride, (GLint64) offset);
@@ -547,7 +546,7 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
         glTransformFeedbackVaryings(attributeProgram, 1, &varyings, GL_SEPARATE_ATTRIBS);
         if(linkProgram(attributeProgram) < 0) {
             os::log("error linking attribute display shader program. failed.\n");
-        return false;
+            return false;
         }
     }
     if(attributeProgram == 0) {
@@ -586,7 +585,7 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
         glGenVertexArrays(1, &attributeProgramBindings);
     }
     if(attributeProgramBindings == 0) {
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ARRAY_BUFFER, activeVertexBuffer);
         return false;
     }
     
@@ -1010,17 +1009,21 @@ void pipelineView( trace::Call* call, std::ostream& os ) {
     
     // draw stage
     glretrace::pipelineview::drawAttribute(0, params);     // default attribute for now, need some gui work to choose another one
-    glretrace::pipelineview::drawVertexStage(params);
-    glretrace::pipelineview::drawGeometryStage(params);
-    glretrace::pipelineview::drawCullingStage(params);
-    glretrace::pipelineview::drawFragmentStage(params);
+    //~ glretrace::pipelineview::drawVertexStage(params);
+    //~ glretrace::pipelineview::drawGeometryStage(params);
+    //~ glretrace::pipelineview::drawCullingStage(params);
+    //~ glretrace::pipelineview::drawFragmentStage(params);
+
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, glretrace::pipelineview::framebuffer);
+    glBlitFramebuffer(0, 0, 1280, 256, 0, 0, 1280, 256, GL_COLOR_BUFFER_BIT, GL_LINEAR);
     
     // get snapshots
-    {
-        JSONWriter json(os);
-        glstate::Context context;
-        glstate::dumpFramebuffer(json, context);
-    }
+    //~ {
+        //~ JSONWriter json(os);
+        //~ glstate::Context context;
+        //~ glstate::dumpFramebuffer(json, context);
+    //~ }
     
     glretrace::pipelineview::cleanupPrograms();
     glretrace::pipelineview::cleanupShaders();

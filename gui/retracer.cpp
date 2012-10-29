@@ -289,10 +289,10 @@ void Retracer::run()
     if (m_captureState) {
         qDebug() << "capture state";
         
-        arguments << QLatin1String("-D");
+        arguments << QLatin1String("-P");
         arguments << QString::number(m_captureCall);
     } else if (m_captureThumbnails) {
-        qDebug() << "capture thumbnails/pipeline";
+        qDebug() << "capture thumbnails";
 
         arguments << QLatin1String("-s"); // emit snapshots
         arguments << QLatin1String("-"); // emit to stdout
@@ -493,7 +493,7 @@ void Retracer::run()
     if (m_captureThumbnails && !thumbnails.isEmpty()) {
         emit foundThumbnails(thumbnails);
     }
-
+    
     if (isProfiling() && profile) {
         emit foundProfile(profile);
     }

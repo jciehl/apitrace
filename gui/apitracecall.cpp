@@ -566,7 +566,8 @@ const QVariantMap & ApiTraceState::uniforms() const
 
 bool ApiTraceState::isEmpty() const
 {
-    return m_parameters.isEmpty();
+    //~ return m_parameters.isEmpty();
+    return m_parameters.isEmpty() && m_framebuffers.isEmpty();
 }
 
 const QList<ApiTexture> & ApiTraceState::textures() const
@@ -581,6 +582,14 @@ const QList<ApiFramebuffer> & ApiTraceState::framebuffers() const
 
 ApiFramebuffer ApiTraceState::colorBuffer() const
 {
+#if 0
+    foreach (ApiFramebuffer fbo, m_framebuffers) {
+        if (fbo.type() == QLatin1String("GL_COLOR_ATTACHMENT0")) {
+            return fbo;
+        }
+    }  
+#endif
+
     foreach (ApiFramebuffer fbo, m_framebuffers) {
         if (fbo.type() == QLatin1String("GL_BACK")) {
             return fbo;
