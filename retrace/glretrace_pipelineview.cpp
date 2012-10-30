@@ -26,8 +26,18 @@ bool initContext( ) {
         return true;
     }
     
-    pipelineContext= createContext(currentContext);
+    pipelineContext= createContext(currentContext, glws::PROFILE_CORE); // test, use debug output to track some bugs
     return (pipelineContext != NULL);
+}
+
+void debugOutput( GLenum source,  GLenum type, unsigned int id, GLenum severity, GLsizei length, const char* message, void* userParam )
+{
+    if(severity == GL_DEBUG_SEVERITY_HIGH)
+        os::log("openGL error:\n%s\n", message);
+    else if(severity == GL_DEBUG_SEVERITY_MEDIUM)
+        os::log("openGL warning:\n%s\n", message);
+    else
+        os::log("openGL message:\n%s\n", message);
 }
 
 bool useContext( ) {
@@ -47,6 +57,10 @@ bool useContext( ) {
             // pipeline view requires transform feedback
             exit(1);
         }
+        
+        // test
+        glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS_ARB);
+        glDebugMessageCallbackARB(debugOutput, NULL);
     }
     
     return code;
@@ -240,10 +254,6 @@ int getActiveBuffers( ) {
     activeVertexArray= 0;
     activeBuffers.clear();
     
-    if(activeAttributeCount == 0) {
-        return -1;
-    }
-    
     std::cerr << "active buffers:\n";
     
     glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &activeVertexBuffer);
@@ -265,6 +275,10 @@ int getActiveBuffers( ) {
         std::cerr << "  no vertex array object\n";
     } else {
         std::cerr << "  vertex array object " << activeVertexArray << "\n";
+    }
+    
+    if(activeAttributeCount == 0) {
+        return -1;
     }
     
     bool failed= false;
@@ -305,15 +319,9 @@ int getActiveBuffers( ) {
         activeBuffers[i].offset= (GLint64) offset;
         
         if(buffer != 0) {
-            if(activeProgram != 0) {
-                os::log("    attribute %d '%s': vertex buffer object %d, enabled %d, item size %d, item type 0x%x, stride %d, offset %lu\n", 
-                    i, &activeAttributes[i].name.front(), 
-                    buffer, enabled, size, type, stride, (GLint64) offset);
-            } else {
-                os::log("    attribute %d: vertex buffer object %d, enabled %d, item size %d, item type 0x%x, stride %d, offset %lu\n", 
-                    i, buffer, 
-                    enabled, size, type, stride, (GLint64) offset);
-            }
+            os::log("    attribute %d '%s': vertex buffer object %d, enabled %d, item size %d, item type 0x%x, stride %d, offset %lu\n", 
+                i, &activeAttributes[i].name.front(), 
+                buffer, enabled, size, type, stride, (GLint64) offset);
         }
     }
     
@@ -349,9 +357,10 @@ const char *displayFragmentSource= {
 "
 };
 
-GLuint createDisplayProgram( unsigned int mask, const char *fragmentSource ) {
-    if(mask == 0 || fragmentSource == NULL)
+GLuint createDisplayProgram( const unsigned int mask, const char *fragmentSource ) {
+    if(mask == 0 || fragmentSource == NULL) {
         return 0;
+    }
     
     GLuint program= createProgram();
     if(program == 0) {
@@ -375,15 +384,28 @@ GLuint createDisplayProgram( unsigned int mask, const char *fragmentSource ) {
     
     // attach display fragment shader
     GLuint fragmentShader= createShader(GL_FRAGMENT_SHADER, fragmentSource);
+    if(fragmentShader == 0) {
+        os::log("error compiling display shader program. failed.\n");
+        return 0;
+    }
     glAttachShader(program, fragmentShader);
     
-    // bind attributes to the same locations
-    for(int i= 0; i < activeAttributeCount; i++) {
-        glBindAttribLocation(program, i, &activeAttributes[i].name.front());
+    // bind required attributes to the same locations
+    // step 1: link display program
+    if(!linkProgram(program)) {
+        os::log("error linking display shader program. failed.\n");
+        return 0;
     }
     
-    // link display program
-    if(linkProgram(program) < 0) {
+    // step 2: bind required attribute locations
+    for(int i= 0; i < activeAttributeCount; i++) {
+        GLint location= glGetAttribLocation(program, &activeAttributes[i].name.front());
+        if(location >= 0)
+            glBindAttribLocation(program, i, &activeAttributes[i].name.front());
+    }
+    
+    // step 3: relink display program
+    if(!linkProgram(program)) {
         os::log("error linking display shader program. failed.\n");
         return 0;
     }
@@ -434,6 +456,7 @@ struct Program {
                 return false;
             }
         }
+        
         // match found
         return true;
         
@@ -447,7 +470,7 @@ static std::vector<Program> displayPrograms;
 static GLuint attributeProgram= 0;
 
 //! program cache, retrieve an already built shader program or create a new one
-GLuint getDisplayProgram( unsigned int mask, const char *fragmentSource ) {
+GLuint getDisplayProgram( const unsigned int mask, const char *fragmentSource ) {
     // build required shader state
     std::vector<GLuint> stages(MAX_STAGES, 0);
     for(int i= 0; i < MAX_STAGES; i++) {
@@ -460,6 +483,7 @@ GLuint getDisplayProgram( unsigned int mask, const char *fragmentSource ) {
     int count= (int) displayPrograms.size();
     for(int i= 0; i < count; i++) {
         if(displayPrograms[i].match(mask, stages, fragmentSource)) {
+            os::log("get display program from cache\n");
             return displayPrograms[i].name;    // hit
         }
     }
@@ -467,10 +491,12 @@ GLuint getDisplayProgram( unsigned int mask, const char *fragmentSource ) {
     // cache miss, build a new program
     GLuint program= createDisplayProgram(mask, fragmentSource);
     if(program == 0) {
+        os::log("error building display program\n");
         return 0;
     }
     
     // cache the new program
+    os::log("cache display program\n");
     displayPrograms.push_back( Program(program, mask, stages, fragmentSource) );
     return program;
 }
@@ -495,15 +521,7 @@ void draw( const DrawCall& params ) {
     if(params.indexType == 0)
         glDrawArrays(params.primitive, params.first, params.count);
     else
-    {
-        if(activeIndexBuffer == 0)
-        {
-            os::log("glDrawElements called, but there is no index buffer. failed.\n");
-            return;
-        }
-        
         glDrawElements(params.primitive, params.count, params.indexType, (const GLvoid *) params.indexOffset);
-    }
 }
 
 
@@ -539,12 +557,12 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     // use a vertex shader and transform feedback to convert the attribute data 
     if(attributeProgram == 0) {
         attributeProgram= createProgram(attributeVertexSource, displayFragmentSource);
-        glBindAttribLocation(attributeProgram, 0, "position");
+        glBindAttribLocation(attributeProgram, 0, "position");  // glsl 150 doesn't support layout(location = )
         
         const char *varyings= "feedback";
         //~ const char *varyings= "gl_Position";
         glTransformFeedbackVaryings(attributeProgram, 1, &varyings, GL_SEPARATE_ATTRIBS);
-        if(linkProgram(attributeProgram) < 0) {
+        if(!linkProgram(attributeProgram)) {
             os::log("error linking attribute display shader program. failed.\n");
             return false;
         }
@@ -562,13 +580,13 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
         return false;
     }
     
-    // resize feedback buffer, use array_buffer target (can't use transform feedback target on ati, fglrx 12.9beta)
+    // resize feedback buffer, use array_buffer target (can't use transform feedback target to create the buffer on ati, fglrx 12.9)
     glBindBuffer(GL_ARRAY_BUFFER, attributeProgramBuffer);
     GLint64 feedbackLength= 0;
     glGetBufferParameteri64v(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &feedbackLength);
 
     GLint64 stride= activeBuffers[id].stride;
-    GLint64 count= (activeBuffers[id].length - activeBuffers[id].offset) / stride;
+    GLint64 count= (activeBuffers[id].length - activeBuffers[id].offset) / stride;      //! \bug be more precise 
     
     os::log("  vertex buffer object %d: length %lu, stride %lu, offset %lu, count %ld\n", 
         activeBuffers[id].buffer, activeBuffers[id].length, stride, activeBuffers[id].offset, count);
@@ -651,7 +669,7 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
         os::log("can't get valid data from attribute '%s', vertex buffer object %d. failed.\n", 
             &activeAttributes[id].name.front(), activeBuffers[id].buffer);
         
-        glBindVertexArray(0);
+        glBindVertexArray(activeVertexArray);
         glBindBuffer(GL_ARRAY_BUFFER, activeVertexBuffer);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, activeIndexBuffer);
         return false;
@@ -680,7 +698,7 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     draw(drawParams);
     
     // restore application state
-    glBindVertexArray(0);
+    glBindVertexArray(activeVertexArray);
     glBindBuffer(GL_ARRAY_BUFFER, activeVertexBuffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, activeIndexBuffer);
     os::log("  done.\n");
@@ -706,7 +724,7 @@ bool drawVertexStage( const DrawCall& drawParams ) {
     if(program == 0) {
         glClearColor( 1.f, .0f, .0f, 1.f );
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        os::log("error building vertex display shader program. failed.");
+        os::log("error building vertex display shader program. failed.\n");
         return false;
     }
     
@@ -718,6 +736,9 @@ bool drawVertexStage( const DrawCall& drawParams ) {
     assignProgramUniforms(program, activeProgram);
     
     // draw
+    glBindVertexArray(activeVertexArray);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, activeIndexBuffer);
+    
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glDisable(GL_CULL_FACE);
     
@@ -747,7 +768,7 @@ bool drawGeometryStage( const DrawCall& drawParams ) {
         // display a solid red background
         glClearColor( 1.f, .0f, .0f, 1.f );
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        os::log("error building geometry display shader program. failed.");
+        os::log("error building geometry display shader program. failed.\n");
         return false;
     }
     
@@ -759,6 +780,9 @@ bool drawGeometryStage( const DrawCall& drawParams ) {
     assignProgramUniforms(program, activeProgram);
     
     // draw
+    glBindVertexArray(activeVertexArray);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, activeIndexBuffer);
+    
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glDisable(GL_CULL_FACE);
     
@@ -816,7 +840,7 @@ bool drawCullingStage( const DrawCall& drawParams ) {
         // display a solid red background
         glClearColor( 1.f, .0f, .0f, 1.f );
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        os::log("error building vertex display shader program. failed.\n");
+        os::log("error building culling display shader program. failed.\n");
         return false;
     }
     
@@ -828,6 +852,9 @@ bool drawCullingStage( const DrawCall& drawParams ) {
     assignProgramUniforms(program, activeProgram);
     
     // draw
+    glBindVertexArray(activeVertexArray);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, activeIndexBuffer);
+    
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glEnable(GL_CULL_FACE);
     
@@ -853,6 +880,9 @@ bool drawFragmentStage( const DrawCall& drawParams ) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
     os::log("draw_fragment_stage( ):\n");
+    
+    glBindVertexArray(activeVertexArray);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, activeIndexBuffer);
     
     glUseProgram(activeProgram);
     glPolygonMode(GL_FRONT_AND_BACK, activePolygonModes[0]);
@@ -990,6 +1020,9 @@ void pipelineView( trace::Call* call, std::ostream& os ) {
     params.indexType= type;
     params.indexOffset= (unsigned long int) indices;    
     
+    //retrace draw call
+    draw(params);
+    
     glretrace::pipelineview::getActiveStages();
     glretrace::pipelineview::getActiveAttributes();
     glretrace::pipelineview::getActiveBuffers();
@@ -1009,21 +1042,21 @@ void pipelineView( trace::Call* call, std::ostream& os ) {
     
     // draw stage
     glretrace::pipelineview::drawAttribute(0, params);     // default attribute for now, need some gui work to choose another one
-    //~ glretrace::pipelineview::drawVertexStage(params);
-    //~ glretrace::pipelineview::drawGeometryStage(params);
-    //~ glretrace::pipelineview::drawCullingStage(params);
-    //~ glretrace::pipelineview::drawFragmentStage(params);
+    glretrace::pipelineview::drawVertexStage(params);
+    glretrace::pipelineview::drawGeometryStage(params);
+    glretrace::pipelineview::drawCullingStage(params);
+    glretrace::pipelineview::drawFragmentStage(params);
 
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, glretrace::pipelineview::framebuffer);
     glBlitFramebuffer(0, 0, 1280, 256, 0, 0, 1280, 256, GL_COLOR_BUFFER_BIT, GL_LINEAR);
     
-    // get snapshots
-    //~ {
-        //~ JSONWriter json(os);
-        //~ glstate::Context context;
-        //~ glstate::dumpFramebuffer(json, context);
-    //~ }
+    {
+        os::log("get snapshots\n");
+        JSONWriter json(os);
+        glstate::Context context;
+        glstate::dumpFramebuffer(json, context);
+    }
     
     glretrace::pipelineview::cleanupPrograms();
     glretrace::pipelineview::cleanupShaders();

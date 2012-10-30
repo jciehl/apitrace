@@ -127,6 +127,22 @@ bool linkProgram( const GLuint program ) {
     glGetShaderiv(program, GL_INFO_LOG_LENGTH, &length);
     if(length == 0) {
         os::log("error linking shader program (no info log).\n");
+        
+        // display source
+        GLint count= 0;
+        glGetProgramiv(program, GL_ATTACHED_SHADERS, &count);
+        std::vector<GLuint> shaders(count, 0);
+        glGetAttachedShaders(program, count, NULL, &shaders.front());
+        for(int i= 0; i < count; i++) {
+            GLint length= 0;
+            glGetShaderiv(shaders[i], GL_SHADER_SOURCE_LENGTH, &length);
+            
+            GLchar *source= new GLchar[length];
+            glGetShaderSource(shaders[i], length, NULL, source);
+            
+            os::log("shader %d:\n%s\n--\n", shaders[i], source);
+            delete [] source;
+        }
     } else {
         std::vector<GLchar> log(length, 0);
         glGetProgramInfoLog(program, (GLsizei) length, NULL, &log.front());
@@ -138,19 +154,19 @@ bool linkProgram( const GLuint program ) {
 
 
 static 
-bool assignUniformuiv( GLint location, int size, GLenum type, void *data ) {
+bool assignUniformuiv( const GLint location, const int size, const GLenum type, const void *data ) {
     switch(type) {
         case GL_UNSIGNED_INT:
-            glUniform1uiv(location, size, (GLuint *) data);
+            glUniform1uiv(location, size, (const GLuint *) data);
             break;
         case GL_UNSIGNED_INT_VEC2:
-            glUniform2uiv(location, size, (GLuint *) data);
+            glUniform2uiv(location, size, (const GLuint *) data);
             break;
         case GL_UNSIGNED_INT_VEC3:
-            glUniform3uiv(location, size, (GLuint *) data);
+            glUniform3uiv(location, size, (const GLuint *) data);
             break;
         case GL_UNSIGNED_INT_VEC4:
-            glUniform4uiv(location, size, (GLuint *) data);
+            glUniform4uiv(location, size, (const GLuint *) data);
             break;
         
         default:
@@ -162,7 +178,7 @@ bool assignUniformuiv( GLint location, int size, GLenum type, void *data ) {
 }
 
 static 
-bool assignUniformiv( GLint location, int size, GLenum type, void *data ) {
+bool assignUniformiv( const GLint location, const int size, const GLenum type, const void *data ) {
     switch(type) {
         case GL_INT:
         case GL_BOOL:
@@ -186,17 +202,17 @@ bool assignUniformiv( GLint location, int size, GLenum type, void *data ) {
         case GL_UNSIGNED_INT_SAMPLER_1D_ARRAY:
         case GL_UNSIGNED_INT_SAMPLER_2D_ARRAY:
         case GL_UNSIGNED_INT:
-            glUniform1iv(location, size, (GLint *) data);
+            glUniform1iv(location, size, (const GLint *) data);
             break;
         
         case GL_UNSIGNED_INT_VEC2:
-            glUniform2iv(location, size, (GLint *) data);
+            glUniform2iv(location, size, (const GLint *) data);
             break;
         case GL_UNSIGNED_INT_VEC3:
-            glUniform3iv(location, size, (GLint *) data);
+            glUniform3iv(location, size, (const GLint *) data);
             break;
         case GL_UNSIGNED_INT_VEC4:
-            glUniform4iv(location, size, (GLint *) data);
+            glUniform4iv(location, size, (const GLint *) data);
             break;
         
         default:
@@ -208,48 +224,48 @@ bool assignUniformiv( GLint location, int size, GLenum type, void *data ) {
 }
 
 static 
-bool assignUniformfv( GLint location, int size, GLenum type, void *data ) {
+bool assignUniformfv( const GLint location, const int size, const GLenum type, const void *data ) {
     switch(type) {
         case GL_FLOAT:
-            glUniform1fv(location, size, (GLfloat *) data);
+            glUniform1fv(location, size, (const GLfloat *) data);
             break;
         case GL_FLOAT_VEC2:
-            glUniform2fv(location, size, (GLfloat *) data);
+            glUniform2fv(location, size, (const GLfloat *) data);
             break;
         case GL_FLOAT_VEC3:
-            glUniform3fv(location, size, (GLfloat *) data);
+            glUniform3fv(location, size, (const GLfloat *) data);
             break;
         case GL_FLOAT_VEC4:
-            glUniform4fv(location, size, (GLfloat *) data);
+            glUniform4fv(location, size, (const GLfloat *) data);
             break;
         
         case GL_FLOAT_MAT2:
-            glUniformMatrix2fv(location, size, GL_FALSE, (GLfloat *) data);
+            glUniformMatrix2fv(location, size, GL_FALSE, (const GLfloat *) data);
             break;
         case GL_FLOAT_MAT3:
-            glUniformMatrix3fv(location, size, GL_FALSE, (GLfloat *) data);
+            glUniformMatrix3fv(location, size, GL_FALSE, (const GLfloat *) data);
             break;
         case GL_FLOAT_MAT4:
-            glUniformMatrix4fv(location, size, GL_FALSE, (GLfloat *) data);
+            glUniformMatrix4fv(location, size, GL_FALSE, (const GLfloat *) data);
             break;
         
         case GL_FLOAT_MAT2x3:
-            glUniformMatrix2x3fv(location, size, GL_FALSE, (GLfloat *) data);
+            glUniformMatrix2x3fv(location, size, GL_FALSE, (const GLfloat *) data);
             break;
         case GL_FLOAT_MAT2x4:
-            glUniformMatrix2x4fv(location, size, GL_FALSE, (GLfloat *) data);
+            glUniformMatrix2x4fv(location, size, GL_FALSE, (const GLfloat *) data);
             break;
         case GL_FLOAT_MAT3x2:
-            glUniformMatrix3x2fv(location, size, GL_FALSE, (GLfloat *) data);
+            glUniformMatrix3x2fv(location, size, GL_FALSE, (const GLfloat *) data);
             break;
         case GL_FLOAT_MAT3x4:
-            glUniformMatrix3x4fv(location, size, GL_FALSE, (GLfloat *) data);
+            glUniformMatrix3x4fv(location, size, GL_FALSE, (const GLfloat *) data);
             break;
         case GL_FLOAT_MAT4x2:
-            glUniformMatrix4x2fv(location, size, GL_FALSE, (GLfloat *) data);
+            glUniformMatrix4x2fv(location, size, GL_FALSE, (const GLfloat *) data);
             break;
         case GL_FLOAT_MAT4x3:
-            glUniformMatrix4x3fv(location, size, GL_FALSE, (GLfloat *) data);
+            glUniformMatrix4x3fv(location, size, GL_FALSE, (const GLfloat *) data);
             break;
         
         default:
@@ -276,7 +292,7 @@ bool assignProgramUniforms( const GLint program, const GLint activeProgram ) {
         
         GLint location= glGetUniformLocation(program, &name.front());
         if(location < 0) {
-            // skip uniforms used in other pipeline stages
+            // skip uniforms not used in required pipeline stages
             continue;
         }
         
@@ -289,9 +305,13 @@ bool assignProgramUniforms( const GLint program, const GLint activeProgram ) {
         GLenum itemType;
         GLint numCols, numRows;
         _gl_uniform_size(glslType, itemType, numCols, numRows);
+        if(itemType == GL_NONE) {
+            os::log("oops\n");
+            return false;
+        }
         
         data.clear();
-        data.resize( _gl_type_size(itemType) * numRows * numCols);
+        data.resize( _gl_type_size(itemType) * numRows * numCols * arraySize);
         switch(glslType) {
             case GL_UNSIGNED_INT:
             case GL_UNSIGNED_INT_VEC2:

@@ -203,9 +203,9 @@ Transform LookAt( const Point &pos, const Point &look, const Vector &up )
     inv_t.m[0][3] = -pos.x;
     inv_t.m[1][3] = -pos.y;
     inv_t.m[2][3] = -pos.z;
-    inv_t.m[3][3] = -1.f;
+    inv_t.m[3][3] = 1.f;
 
-    return inv_t*inv_r;
+    return inv_r*inv_t;
 }
 
 }       // namespace pipeline view
