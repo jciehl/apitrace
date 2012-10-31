@@ -158,13 +158,31 @@ struct Transform {
         return Transform(t);
     }
     
+    //~ //! affiche la matrice.
+    //~ void print( ) const
+    //~ {
+        //~ #define M44(m, r, c) m[r][c]
+        
+        //~ os::log("% -.8f  % -.8f  % -.8f  % -.8f\n", 
+            //~ M44(m, 0, 0), M44(m, 0, 1), M44(m, 0, 2), M44(m, 0, 3));
+        //~ os::log("% -.8f  % -.8f  % -.8f  % -.8f\n", 
+            //~ M44(m, 1, 0), M44(m, 1, 1), M44(m, 1, 2), M44(m, 1, 3));
+        //~ os::log("% -.8f  % -.8f  % -.8f  % -.8f\n", 
+            //~ M44(m, 2, 0), M44(m, 2, 1), M44(m, 2, 2), M44(m, 2, 3));
+        //~ os::log("% -.8f  % -.8f  % -.8f  % -.8f\n", 
+            //~ M44(m, 3, 0), M44(m, 3, 1), M44(m, 3, 2), M44(m, 3, 3));
+        //~ os::log("\n");
+        
+        //~ #undef M44
+    //~ }    
+    
     static const float Id[4][4];
 };
 
 //! build an openGL perspective transform.
 static inline
 Transform Perspective( const float fov, const float aspect, const float znear, const float zfar ) {
-    const float inv_tan = 1.f / tanf( fov / 2.f * 180.f / (float) M_PI );
+    const float inv_tan = 1.f / tanf( fov / 2.f / 180.f * (float) M_PI );
     const float inv_denom = 1.f / ( znear - zfar );
     Transform persp( 
         inv_tan/aspect,       0,                    0,                      0,

@@ -483,7 +483,6 @@ GLuint getDisplayProgram( const unsigned int mask, const char *fragmentSource ) 
     int count= (int) displayPrograms.size();
     for(int i= 0; i < count; i++) {
         if(displayPrograms[i].match(mask, stages, fragmentSource)) {
-            os::log("get display program from cache\n");
             return displayPrograms[i].name;    // hit
         }
     }
@@ -496,7 +495,6 @@ GLuint getDisplayProgram( const unsigned int mask, const char *fragmentSource ) 
     }
     
     // cache the new program
-    os::log("cache display program\n");
     displayPrograms.push_back( Program(program, mask, stages, fragmentSource) );
     return program;
 }
@@ -581,6 +579,7 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     }
     
     // resize feedback buffer, use array_buffer target (can't use transform feedback target to create the buffer on ati, fglrx 12.9)
+    glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, attributeProgramBuffer);
     GLint64 feedbackLength= 0;
     glGetBufferParameteri64v(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &feedbackLength);
@@ -631,6 +630,11 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     glEndTransformFeedback();
     
     glDisable(GL_RASTERIZER_DISCARD);
+
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, activeVertexBuffer);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, activeIndexBuffer);
+    glBindVertexArray(activeVertexArray);    
     
     // read back buffer content
     Point bmin;
@@ -668,10 +672,6 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     if(radius == 0.f) {
         os::log("can't get valid data from attribute '%s', vertex buffer object %d. failed.\n", 
             &activeAttributes[id].name.front(), activeBuffers[id].buffer);
-        
-        glBindVertexArray(activeVertexArray);
-        glBindBuffer(GL_ARRAY_BUFFER, activeVertexBuffer);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, activeIndexBuffer);
         return false;
     }
     
@@ -697,10 +697,6 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     
     draw(drawParams);
     
-    // restore application state
-    glBindVertexArray(activeVertexArray);
-    glBindBuffer(GL_ARRAY_BUFFER, activeVertexBuffer);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, activeIndexBuffer);
     os::log("  done.\n");
     return true;
 }
@@ -736,8 +732,9 @@ bool drawVertexStage( const DrawCall& drawParams ) {
     assignProgramUniforms(program, activeProgram);
     
     // draw
-    glBindVertexArray(activeVertexArray);
+    glBindVertexArray(0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, activeIndexBuffer);
+    glBindVertexArray(activeVertexArray);
     
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glDisable(GL_CULL_FACE);
@@ -780,8 +777,9 @@ bool drawGeometryStage( const DrawCall& drawParams ) {
     assignProgramUniforms(program, activeProgram);
     
     // draw
-    glBindVertexArray(activeVertexArray);
+    glBindVertexArray(0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, activeIndexBuffer);
+    glBindVertexArray(activeVertexArray);
     
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glDisable(GL_CULL_FACE);
@@ -852,8 +850,9 @@ bool drawCullingStage( const DrawCall& drawParams ) {
     assignProgramUniforms(program, activeProgram);
     
     // draw
-    glBindVertexArray(activeVertexArray);
+    glBindVertexArray(0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, activeIndexBuffer);
+    glBindVertexArray(activeVertexArray);
     
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glEnable(GL_CULL_FACE);
@@ -881,10 +880,12 @@ bool drawFragmentStage( const DrawCall& drawParams ) {
     
     os::log("draw_fragment_stage( ):\n");
     
-    glBindVertexArray(activeVertexArray);
+    glBindVertexArray(0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, activeIndexBuffer);
+    glBindVertexArray(activeVertexArray);
     
     glUseProgram(activeProgram);
+    //! \bug uniforms are part of the other context...
     glPolygonMode(GL_FRONT_AND_BACK, activePolygonModes[0]);
     if(activeCullTest == 0) {
         glDisable(GL_CULL_FACE);
@@ -1045,11 +1046,16 @@ void pipelineView( trace::Call* call, std::ostream& os ) {
     glretrace::pipelineview::drawVertexStage(params);
     glretrace::pipelineview::drawGeometryStage(params);
     glretrace::pipelineview::drawCullingStage(params);
+    
+    glretrace::pipelineview::restoreContext();
+    
     glretrace::pipelineview::drawFragmentStage(params);
 
+    glDisable(GL_SCISSOR_TEST);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, glretrace::pipelineview::framebuffer);
-    glBlitFramebuffer(0, 0, 1280, 256, 0, 0, 1280, 256, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+    glBlitFramebuffer(0, 0, 1280, 256, 0, 0, 1280, 256, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
     
     {
         os::log("get snapshots\n");

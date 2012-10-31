@@ -310,6 +310,11 @@ bool assignProgramUniforms( const GLint program, const GLint activeProgram ) {
             return false;
         }
         
+        if(_gl_type_size(itemType) == 0) {
+            os::log("oops\n");
+            return false;
+        }
+        
         data.clear();
         data.resize( _gl_type_size(itemType) * numRows * numCols * arraySize);
         switch(glslType) {
