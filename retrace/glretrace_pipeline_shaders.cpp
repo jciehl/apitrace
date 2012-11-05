@@ -205,13 +205,13 @@ bool assignUniformiv( const GLint location, const int size, const GLenum type, c
             glUniform1iv(location, size, (const GLint *) data);
             break;
         
-        case GL_UNSIGNED_INT_VEC2:
+        case GL_INT_VEC2:
             glUniform2iv(location, size, (const GLint *) data);
             break;
-        case GL_UNSIGNED_INT_VEC3:
+        case GL_INT_VEC3:
             glUniform3iv(location, size, (const GLint *) data);
             break;
-        case GL_UNSIGNED_INT_VEC4:
+        case GL_INT_VEC4:
             glUniform4iv(location, size, (const GLint *) data);
             break;
         
@@ -316,7 +316,7 @@ bool assignProgramUniforms( const GLint program, const GLint activeProgram ) {
         }
         
         data.clear();
-        data.resize( _gl_type_size(itemType) * numRows * numCols * arraySize);
+        data.resize( _gl_type_size(itemType) * numRows * numCols * arraySize );
         switch(glslType) {
             case GL_UNSIGNED_INT:
             case GL_UNSIGNED_INT_VEC2:

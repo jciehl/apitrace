@@ -324,8 +324,8 @@ bool getActiveBuffers( ) {
         activeBuffers[i].offset= (GLint64) offset;
         
         if(buffer != 0) {
-            os::log("    attribute %d '%s': vertex buffer object %d, enabled %d, item size %d, item type 0x%x, stride %d, offset %lu\n", 
-                i, &activeAttributes[i].name.front(), 
+            os::log("    attribute %d '%s': location %d, vertex buffer object %d, enabled %d, item size %d, item type 0x%x, stride %d, offset %lu\n", 
+                i, &activeAttributes[i].name.front(), glGetAttribLocation(activeProgram, &activeAttributes[i].name.front()),
                 buffer, enabled, size, type, stride, (GLint64) offset);
         }
     }
@@ -665,10 +665,6 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     
     glDisable(GL_RASTERIZER_DISCARD);
     
-    glBindVertexArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, activeVertexBuffer);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, activeIndexBuffer);
-    
     // read back buffer content
     Point bmin;
     Point bmax;
@@ -697,7 +693,6 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     }
     
     glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0);
-    glBindVertexArray(activeVertexArray);
     
     // compute a sensible transform to display the data
     float fov= 25.f;
