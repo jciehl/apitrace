@@ -248,7 +248,7 @@ static GLint activeVertexArray= 0;
 static GLint activeVertexBuffer= 0;
 static GLint activeIndexBuffer= 0;
 
-int getActiveBuffers( ) {
+bool getActiveBuffers( ) {
     activeVertexBuffer= 0;
     activeIndexBuffer= 0;
     activeVertexArray= 0;
@@ -278,7 +278,7 @@ int getActiveBuffers( ) {
     }
     
     if(activeAttributeCount == 0) {
-        return -1;
+        return false;
     }
     
     bool failed= false;
@@ -294,7 +294,10 @@ int getActiveBuffers( ) {
         
         GLint size, type, stride;
         GLint enabled, normalized;
+        GLint integer, divisor;
         glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_ENABLED, &enabled);
+        glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_DIVISOR, &divisor);
+        glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_INTEGER, &integer);
         glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_NORMALIZED, &normalized);
         glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_SIZE, &size);
         glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_TYPE, &type);
@@ -313,8 +316,10 @@ int getActiveBuffers( ) {
         activeBuffers[i].enabled= enabled;
         activeBuffers[i].size= size;
         activeBuffers[i].type= type;
-        activeBuffers[i].normalized= normalized;
         activeBuffers[i].stride= stride;
+        activeBuffers[i].normalized= normalized;
+        activeBuffers[i].integer= integer;
+        activeBuffers[i].divisor= divisor;
         activeBuffers[i].length= length;
         activeBuffers[i].offset= (GLint64) offset;
         
@@ -332,15 +337,36 @@ int getActiveBuffers( ) {
     } else {
         std::cerr << "  done.\n";
     }
-    return 0;
+    return true;
 }
 
 
-static GLenum activeCullTest= 0;
-static GLint activePolygonModes[2]= { 0, 0 };
+static GLboolean activeCullTest= GL_FALSE;
+static GLint activeCullFace= GL_BACK;
+static GLint activeFrontFace= GL_CCW;
+
+static GLboolean activeDepthTest= GL_FALSE;
+static GLint activeDepthFunc= GL_LESS;
+static GLint activeDepthMask= GL_TRUE;
+
+static GLboolean activeRasterizerDiscard= GL_FALSE;
+static GLint activeColorMask[4]= { GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE };
+
+static GLint activePolygonModes[4]= { 0, 0 };
 
 bool getActiveState( ) { 
     activeCullTest= glIsEnabled(GL_CULL_FACE);
+    glGetIntegerv(GL_CULL_FACE_MODE, &activeCullFace);
+    glGetIntegerv(GL_FRONT_FACE, &activeFrontFace);
+    
+    activeDepthTest= glIsEnabled(GL_DEPTH_TEST);
+    glGetIntegerv(GL_DEPTH_FUNC, &activeDepthFunc);
+    glGetIntegerv(GL_DEPTH_WRITEMASK, &activeDepthMask);
+    
+    glGetIntegerv(GL_COLOR_WRITEMASK, activeColorMask);
+    
+    activeRasterizerDiscard= glIsEnabled(GL_RASTERIZER_DISCARD);
+    
     glGetIntegerv(GL_POLYGON_MODE, activePolygonModes);
     return true;
 }
@@ -400,8 +426,10 @@ GLuint createDisplayProgram( const unsigned int mask, const char *fragmentSource
     // step 2: bind required attribute locations
     for(int i= 0; i < activeAttributeCount; i++) {
         GLint location= glGetAttribLocation(program, &activeAttributes[i].name.front());
-        if(location >= 0)
+        if(location >= 0) {
             glBindAttribLocation(program, i, &activeAttributes[i].name.front());
+            os::log("bind attrib location %d '%s'\n", i, &activeAttributes[i].name.front());
+        }
     }
     
     // step 3: relink display program
@@ -550,7 +578,7 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
             id, &activeAttributes[id].name.front(), activeBuffers[id].buffer);
         return false;
     }
-
+    
     // get attribute buffer content in 'standard' vec3 form
     // use a vertex shader and transform feedback to convert the attribute data 
     if(attributeProgram == 0) {
@@ -583,7 +611,7 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     glBindBuffer(GL_ARRAY_BUFFER, attributeProgramBuffer);
     GLint64 feedbackLength= 0;
     glGetBufferParameteri64v(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &feedbackLength);
-
+    
     GLint64 stride= activeBuffers[id].stride;
     GLint64 count= (activeBuffers[id].length - activeBuffers[id].offset) / stride;      //! \bug be more precise 
     
@@ -607,14 +635,20 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     }
     
     glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, attributeProgramBuffer);
-
+    
     // bind the attribute buffer
     glBindVertexArray(attributeProgramBindings);
     glBindBuffer(GL_ARRAY_BUFFER, activeBuffers[id].buffer);
-    glVertexAttribPointer(0, activeBuffers[id].size, activeBuffers[id].type, 
-        activeBuffers[id].normalized, 
-        activeBuffers[id].stride, (const GLvoid *) activeBuffers[id].offset);
+    if(activeBuffers[id].integer) {
+        glVertexAttribIPointer(0, activeBuffers[id].size, activeBuffers[id].type, 
+            activeBuffers[id].stride, (const GLvoid *) activeBuffers[id].offset);
+    } else {
+        glVertexAttribPointer(0, activeBuffers[id].size, activeBuffers[id].type, 
+            activeBuffers[id].normalized, 
+            activeBuffers[id].stride, (const GLvoid *) activeBuffers[id].offset);
+    }
     glEnableVertexAttribArray(0);
+    glVertexAttribDivisor(0, activeBuffers[id].divisor);
     
     if(activeIndexBuffer != 0) {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, activeIndexBuffer);
@@ -630,11 +664,10 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     glEndTransformFeedback();
     
     glDisable(GL_RASTERIZER_DISCARD);
-
+    
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, activeVertexBuffer);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, activeIndexBuffer);
-    glBindVertexArray(activeVertexArray);    
     
     // read back buffer content
     Point bmin;
@@ -664,6 +697,7 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     }
     
     glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, 0);
+    glBindVertexArray(activeVertexArray);
     
     // compute a sensible transform to display the data
     float fov= 25.f;
@@ -687,11 +721,10 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     // draw the data
     glViewport(0, 0, 256, 256);
     glScissor(0, 0, 256, 256);
-    glEnable(GL_SCISSOR_TEST);
     
     glClearColor( .05f, .05f, .05f, 1.f );
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+    
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glDisable(GL_CULL_FACE);
     
@@ -701,11 +734,17 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     return true;
 }
 
+void cleanupAttributes( ) {
+    glDeleteVertexArrays(1, &attributeProgramBindings);
+    glDeleteBuffers(1, &attributeProgramBuffer);
+    
+    attributeProgramBindings= 0;
+    attributeProgramBuffer= 0;
+}
 
 bool drawVertexStage( const DrawCall& drawParams ) {
     glViewport(256, 0, 256, 256);
     glScissor(256, 0, 256, 256);
-    glEnable(GL_SCISSOR_TEST);
     
     if(findActiveShader(GL_VERTEX_SHADER) == 0) {
         // nothing to do, display a solid color background ?
@@ -713,7 +752,7 @@ bool drawVertexStage( const DrawCall& drawParams ) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         return true;
     }
-
+    
     os::log("draw_vertex_stage( ):\n");
     
     GLuint program= getDisplayProgram( VERTEX_STAGE_BIT, displayFragmentSource );
@@ -749,7 +788,6 @@ bool drawVertexStage( const DrawCall& drawParams ) {
 bool drawGeometryStage( const DrawCall& drawParams ) {
     glViewport(512, 0, 256, 256);
     glScissor(512, 0, 256, 256);
-    glEnable(GL_SCISSOR_TEST);
     
     if(findActiveShader(GL_GEOMETRY_SHADER) == 0) {
         // nothing to do, display a solid color background ?
@@ -794,24 +832,11 @@ bool drawGeometryStage( const DrawCall& drawParams ) {
 bool drawCullingStage( const DrawCall& drawParams ) {
     glViewport(768, 0, 256, 256);
     glScissor(768, 0, 256, 256);
-    glEnable(GL_SCISSOR_TEST);
     
     bool todo= true;
     if(activeCullTest == GL_FALSE) {
         // nothing to do when culling is disabled
         todo= false;
-    }
-    
-    switch(drawParams.primitive) {
-        case GL_POINTS:
-        case GL_LINE_STRIP:
-        case GL_LINE_LOOP:
-        case GL_LINES:
-        case GL_LINE_STRIP_ADJACENCY:
-        case GL_LINES_ADJACENCY:
-            // nothing to cull when drawing lines or points
-            todo= false;
-            break;
     }
     
     GLuint geometry= findActiveShader(GL_GEOMETRY_SHADER);
@@ -821,6 +846,19 @@ bool drawCullingStage( const DrawCall& drawParams ) {
         if(outputType != GL_TRIANGLE_STRIP) {
             // nothing to cull when the geometry shader outputs lines or points
             todo= false;
+        }
+    } else {
+        // check primitive mode from draw command, if no geometry shader is present
+        switch(drawParams.primitive) {
+            case GL_POINTS:
+            case GL_LINE_STRIP:
+            case GL_LINE_LOOP:
+            case GL_LINES:
+            case GL_LINE_STRIP_ADJACENCY:
+            case GL_LINES_ADJACENCY:
+                // nothing to cull when drawing lines or points
+                todo= false;
+                break;
         }
     }
     
@@ -856,6 +894,7 @@ bool drawCullingStage( const DrawCall& drawParams ) {
     
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glEnable(GL_CULL_FACE);
+    //! \todo import cull state from application context
     
     draw(drawParams);
     
@@ -866,14 +905,15 @@ bool drawCullingStage( const DrawCall& drawParams ) {
 bool drawFragmentStage( const DrawCall& drawParams ) {
     glViewport(1024, 0, 256, 256);
     glScissor(1024, 0, 256, 256);
-    glEnable(GL_SCISSOR_TEST);
 
-    if(glIsEnabled(GL_RASTERIZER_DISCARD)) {
+    if(activeRasterizerDiscard) {
         // nothing to do, nothing to rasterize, display a solid color background ?
         glClearColor( .5f, 0.f, .5f, 1.f );
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         return true;
     }
+    
+    //! \todo test color write mask
     
     glClearColor( .05f, .05f, .05f, 1.f );
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -885,13 +925,21 @@ bool drawFragmentStage( const DrawCall& drawParams ) {
     glBindVertexArray(activeVertexArray);
     
     glUseProgram(activeProgram);
-    //! \bug uniforms are part of the other context...
     glPolygonMode(GL_FRONT_AND_BACK, activePolygonModes[0]);
-    if(activeCullTest == 0) {
+    if(activeCullTest == GL_FALSE) {
         glDisable(GL_CULL_FACE);
     } else {
         glEnable(GL_CULL_FACE);
+        //! \todo import cull state from application context
     }
+    if(activeDepthTest == GL_FALSE) {
+        glDisable(GL_DEPTH_TEST);
+    } else {
+        glEnable(GL_DEPTH_TEST);
+        //! \todo import depth state from application context
+    }
+    
+    //! \todo import blend state from application context: or display the raw output from fragment shader before pixel tests/blend ?
     
     // draw
     draw(drawParams);
@@ -1021,19 +1069,23 @@ void pipelineView( trace::Call* call, std::ostream& os ) {
     params.indexType= type;
     params.indexOffset= (unsigned long int) indices;    
     
-    //retrace draw call
-    draw(params);
-    
     glretrace::pipelineview::getActiveStages();
     glretrace::pipelineview::getActiveAttributes();
     glretrace::pipelineview::getActiveBuffers();
     glretrace::pipelineview::getActiveState();
+
+    //retrace draw call
+    draw(params);
     
+    // pipeline view
     if(!glretrace::pipelineview::initContext() || !glretrace::pipelineview::useContext()) {
         glretrace::pipelineview::restoreContext();
         os::log("error creating pipeline view context.\n");
         return;
     }
+    
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_SCISSOR_TEST);
     
     if(!glretrace::pipelineview::initFramebuffer(1280, 256) || !glretrace::pipelineview::useFramebuffer()) {
         glretrace::pipelineview::restoreContext();
@@ -1041,14 +1093,12 @@ void pipelineView( trace::Call* call, std::ostream& os ) {
         return;
     }
     
+
     // draw stage
     glretrace::pipelineview::drawAttribute(0, params);     // default attribute for now, need some gui work to choose another one
     glretrace::pipelineview::drawVertexStage(params);
     glretrace::pipelineview::drawGeometryStage(params);
     glretrace::pipelineview::drawCullingStage(params);
-    
-    glretrace::pipelineview::restoreContext();
-    
     glretrace::pipelineview::drawFragmentStage(params);
 
     glDisable(GL_SCISSOR_TEST);
@@ -1064,6 +1114,7 @@ void pipelineView( trace::Call* call, std::ostream& os ) {
         glstate::dumpFramebuffer(json, context);
     }
     
+    glretrace::pipelineview::cleanupAttributes();
     glretrace::pipelineview::cleanupPrograms();
     glretrace::pipelineview::cleanupShaders();
     glretrace::pipelineview::cleanupDisplayPrograms();
