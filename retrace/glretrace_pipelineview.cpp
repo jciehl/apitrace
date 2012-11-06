@@ -190,6 +190,7 @@ GLuint findActiveShader( const GLenum type ) {
 
 struct Attribute {
     std::vector<GLchar> name;
+    GLint location;
     GLint arraySize;
     GLint glslType;
 };
@@ -201,34 +202,56 @@ bool getActiveAttributes( ) {
     activeAttributeCount= 0;
     activeAttributes.clear();
 
-    if(activeShaderCount == 0) {
+    if(activeProgram == 0) {
         return false;      // no program
     }
     
     glGetProgramiv(activeProgram, GL_ACTIVE_ATTRIBUTES, &activeAttributeCount);
     activeAttributes.resize(activeAttributeCount);
     
-    std::cerr << activeAttributeCount << " required attributes:\n";
+    os::log("%d required attributes:\n", activeAttributeCount);
     
     GLint attributeLength= 0;
     glGetProgramiv(activeProgram, GL_ACTIVE_ATTRIBUTE_MAX_LENGTH, &attributeLength);
     
-    GLint size;
+    GLint arraySize;
     GLenum glslType;
     for(int i= 0; i < activeAttributeCount; i++) {
         activeAttributes[i].name.clear();
         activeAttributes[i].name.resize(attributeLength);
-        glGetActiveAttrib(activeProgram, i, attributeLength, NULL, &size, &glslType, &activeAttributes[i].name.front());
-        std::cerr << "  attribute " << i << " '" << &activeAttributes[i].name.front() << "': array size " << size << " glslType " << glslType << "\n";
+        glGetActiveAttrib(activeProgram, i, attributeLength, NULL, &arraySize, &glslType, &activeAttributes[i].name.front());
         
-        activeAttributes[i].arraySize= size;
+        activeAttributes[i].location= glGetAttribLocation(activeProgram, &activeAttributes[i].name.front());
+        activeAttributes[i].arraySize= arraySize;
         activeAttributes[i].glslType= glslType;
+        
+        os::log("  attribute '%s': location %d size %d type 0x%x\n", 
+            &activeAttributes[i].name.front(), activeAttributes[i].location, arraySize, glslType);
     }
     
-    std::cerr << "  done.\n";
+    os::log("  done.\n");
     return true;
 }
 
+int getAttributeId( const char *name ) {
+    for(int i= 0; i < activeAttributeCount; i++) {
+        if(strcmp(name, &activeAttributes[i].name.front()) == 0) {
+            return i;
+        }
+    }
+    
+    return -1;
+}
+
+int getAttributeId( const int location ) {
+    for(int i= 0; i < activeAttributeCount; i++) {
+        if(activeAttributes[i].location == location) {
+            return i;
+        }
+    }
+    
+    return -1;
+}
 
 struct BufferBinding {
     GLint buffer;
@@ -283,11 +306,14 @@ bool getActiveBuffers( ) {
     
     bool failed= false;
     activeBuffers.resize(activeAttributeCount);
-    for(int i= 0; i < activeAttributeCount; i++) {
+    for(int location= 0; location < activeAttributeCount; location++) {
+        int id= getAttributeId(location);
+        
         GLint buffer= 0;
-        glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING, &buffer);
+        glGetVertexAttribiv(location, GL_VERTEX_ATTRIB_ARRAY_BUFFER_BINDING, &buffer);
         if(buffer == 0) {
-            std::cerr << "no vertex buffer bound to attribute " << i << " '" << &activeAttributes[i].name.front() << "'\n" ;
+            os::log("  no vertex buffer bound to attribute %d '%s'\n",
+                location, (id < 0) ? "??" : &activeAttributes[id].name.front());
             failed= true;
             continue;
         }
@@ -295,38 +321,38 @@ bool getActiveBuffers( ) {
         GLint size, type, stride;
         GLint enabled, normalized;
         GLint integer, divisor;
-        glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_ENABLED, &enabled);
-        glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_DIVISOR, &divisor);
-        glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_INTEGER, &integer);
-        glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_NORMALIZED, &normalized);
-        glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_SIZE, &size);
-        glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_TYPE, &type);
-        glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_STRIDE, &stride);
+        glGetVertexAttribiv(location, GL_VERTEX_ATTRIB_ARRAY_ENABLED, &enabled);
+        glGetVertexAttribiv(location, GL_VERTEX_ATTRIB_ARRAY_DIVISOR, &divisor);
+        glGetVertexAttribiv(location, GL_VERTEX_ATTRIB_ARRAY_INTEGER, &integer);
+        glGetVertexAttribiv(location, GL_VERTEX_ATTRIB_ARRAY_NORMALIZED, &normalized);
+        glGetVertexAttribiv(location, GL_VERTEX_ATTRIB_ARRAY_SIZE, &size);
+        glGetVertexAttribiv(location, GL_VERTEX_ATTRIB_ARRAY_TYPE, &type);
+        glGetVertexAttribiv(location, GL_VERTEX_ATTRIB_ARRAY_STRIDE, &stride);
         if(stride == 0)
             stride= _gl_type_size(type) * size;
         
         GLvoid *offset= NULL;
-        glGetVertexAttribPointerv(i, GL_VERTEX_ATTRIB_ARRAY_POINTER, &offset);
+        glGetVertexAttribPointerv(location, GL_VERTEX_ATTRIB_ARRAY_POINTER, &offset);
         
         GLint64 length= 0;
         glBindBuffer(GL_ARRAY_BUFFER, buffer);
         glGetBufferParameteri64v(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &length);
         
-        activeBuffers[i].buffer= buffer;
-        activeBuffers[i].enabled= enabled;
-        activeBuffers[i].size= size;
-        activeBuffers[i].type= type;
-        activeBuffers[i].stride= stride;
-        activeBuffers[i].normalized= normalized;
-        activeBuffers[i].integer= integer;
-        activeBuffers[i].divisor= divisor;
-        activeBuffers[i].length= length;
-        activeBuffers[i].offset= (GLint64) offset;
+        activeBuffers[location].buffer= buffer;
+        activeBuffers[location].enabled= enabled;
+        activeBuffers[location].size= size;
+        activeBuffers[location].type= type;
+        activeBuffers[location].stride= stride;
+        activeBuffers[location].normalized= normalized;
+        activeBuffers[location].integer= integer;
+        activeBuffers[location].divisor= divisor;
+        activeBuffers[location].length= length;
+        activeBuffers[location].offset= (GLint64) offset;
         
         if(buffer != 0) {
-            os::log("    attribute %d '%s': location %d, vertex buffer object %d, enabled %d, item size %d, item type 0x%x, stride %d, offset %lu\n", 
-                i, &activeAttributes[i].name.front(), glGetAttribLocation(activeProgram, &activeAttributes[i].name.front()),
-                buffer, enabled, size, type, stride, (GLint64) offset);
+            os::log("    attribute '%s': location %d, vertex buffer object %d (item size %d, item type 0x%x, stride %d, offset %lu)\n", 
+                (id < 0) ? "??" : &activeAttributes[id].name.front(), 
+                location, buffer, size, type, stride, (GLint64) offset);
         }
     }
     
@@ -427,8 +453,8 @@ GLuint createDisplayProgram( const unsigned int mask, const char *fragmentSource
     for(int i= 0; i < activeAttributeCount; i++) {
         GLint location= glGetAttribLocation(program, &activeAttributes[i].name.front());
         if(location >= 0) {
-            glBindAttribLocation(program, i, &activeAttributes[i].name.front());
-            os::log("bind attrib location %d '%s'\n", i, &activeAttributes[i].name.front());
+            glBindAttribLocation(program, activeAttributes[i].location, &activeAttributes[i].name.front());
+            os::log("bind attrib location %d '%s'\n", activeAttributes[i].location, &activeAttributes[i].name.front());
         }
     }
     
@@ -566,16 +592,27 @@ const char *attributeVertexSource= {
 static GLuint attributeProgramBuffer= 0;
 static GLuint attributeProgramBindings= 0;
 
-bool drawAttribute( const int id, const DrawCall& drawParams ) {
-    os::log("draw_attribute(%d):\n", id);
-    
-    if(id < 0 || id >= activeAttributeCount) {
+bool drawAttribute( const int location, const DrawCall& drawParams ) {
+    int id= getAttributeId(location);
+    if(id < 0 || location < 0 || location >= activeAttributeCount) {
         return false;
     }
     
-    if(activeBuffers[id].buffer == 0 || activeBuffers[id].length == 0) {
+    os::log("draw_attribute(%d '%s'):\n", location, &activeAttributes[id].name.front());
+    
+    if(activeBuffers[location].enabled == 0) {
+        os::log("  attribute %d '%s' disabled. can't draw anything. failed.\n", 
+            location, &activeAttributes[id].name.front());
+        return false;
+    }
+    if(activeBuffers[location].divisor > 0) {
+        os::log("  attribute %d '%s' is instanced (divisor %d). can't draw anything. failed.\n", 
+            location, &activeAttributes[id].name.front(), activeBuffers[location].divisor);
+        return false;
+    }
+    if(activeBuffers[location].buffer == 0 || activeBuffers[location].length == 0) {
         os::log("  attribute %d '%s' vertex buffer object %d, null length. can't draw anything. failed.\n", 
-            id, &activeAttributes[id].name.front(), activeBuffers[id].buffer);
+            location, &activeAttributes[id].name.front(), activeBuffers[location].buffer);
         return false;
     }
     
@@ -608,15 +645,16 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     
     // resize feedback buffer, use array_buffer target (can't use transform feedback target to create the buffer on ati, fglrx 12.9)
     glBindVertexArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, attributeProgramBuffer);
     GLint64 feedbackLength= 0;
+    glBindBuffer(GL_ARRAY_BUFFER, attributeProgramBuffer);
     glGetBufferParameteri64v(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &feedbackLength);
     
-    GLint64 stride= activeBuffers[id].stride;
-    GLint64 count= (activeBuffers[id].length - activeBuffers[id].offset) / stride;      //! \bug be more precise 
+    GLint64 stride= activeBuffers[location].stride;
+    GLint64 count= (activeBuffers[location].length - activeBuffers[location].offset) / stride;      //! \bug be more precise 
     
-    os::log("  vertex buffer object %d: length %lu, stride %lu, offset %lu, count %ld\n", 
-        activeBuffers[id].buffer, activeBuffers[id].length, stride, activeBuffers[id].offset, count);
+    os::log("  attribute %d '%s', vertex buffer object %d (length %lu, stride %lu, offset %lu, count %ld)\n", 
+        location, &activeAttributes[id].name.front(),
+        activeBuffers[location].buffer, activeBuffers[location].length, stride, activeBuffers[location].offset, count);
     
     // store count vec3s
     GLint64 length= count * sizeof(float [3]);
@@ -624,13 +662,13 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
         std::vector<unsigned char> zeroes(length, 0);
         glBufferData(GL_ARRAY_BUFFER, length, &zeroes.front(), GL_DYNAMIC_COPY);
     }
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
     
     // convert buffer content
     if(attributeProgramBindings == 0) {
         glGenVertexArrays(1, &attributeProgramBindings);
     }
     if(attributeProgramBindings == 0) {
-        glBindBuffer(GL_ARRAY_BUFFER, activeVertexBuffer);
         return false;
     }
     
@@ -638,17 +676,16 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     
     // bind the attribute buffer
     glBindVertexArray(attributeProgramBindings);
-    glBindBuffer(GL_ARRAY_BUFFER, activeBuffers[id].buffer);
-    if(activeBuffers[id].integer) {
-        glVertexAttribIPointer(0, activeBuffers[id].size, activeBuffers[id].type, 
-            activeBuffers[id].stride, (const GLvoid *) activeBuffers[id].offset);
+    glBindBuffer(GL_ARRAY_BUFFER, activeBuffers[location].buffer);
+    if(activeBuffers[location].integer) {
+        glVertexAttribIPointer(0, activeBuffers[location].size, activeBuffers[location].type, 
+            activeBuffers[location].stride, (const GLvoid *) activeBuffers[location].offset);
     } else {
-        glVertexAttribPointer(0, activeBuffers[id].size, activeBuffers[id].type, 
-            activeBuffers[id].normalized, 
-            activeBuffers[id].stride, (const GLvoid *) activeBuffers[id].offset);
+        glVertexAttribPointer(0, activeBuffers[location].size, activeBuffers[location].type, 
+            activeBuffers[location].normalized, 
+            activeBuffers[location].stride, (const GLvoid *) activeBuffers[location].offset);
     }
     glEnableVertexAttribArray(0);
-    glVertexAttribDivisor(0, activeBuffers[id].divisor);
     
     if(activeIndexBuffer != 0) {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, activeIndexBuffer);
@@ -658,7 +695,7 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     glEnable(GL_RASTERIZER_DISCARD);
     glUseProgram(attributeProgram);
     
-    GLint64 first= activeBuffers[id].offset / stride;
+    GLint64 first= activeBuffers[location].offset / stride;
     glBeginTransformFeedback(GL_POINTS);
     glDrawArrays(GL_POINTS, first, count);
     glEndTransformFeedback();
@@ -671,11 +708,12 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     Point *positions= (Point *) glMapBuffer(GL_TRANSFORM_FEEDBACK_BUFFER, GL_READ_ONLY);
     if(positions == NULL) {
         os::log("cant' read attribute '%s', vertex buffer object %d. failed.\n", 
-            &activeAttributes[id].name.front(), activeBuffers[id].buffer);
+            &activeAttributes[id].name.front(), activeBuffers[location].buffer);
     } else {
         // compute bbox
         bmin= Point( std::numeric_limits<float>::infinity() );
         bmax= Point( - std::numeric_limits<float>::infinity() );
+        
         for(int i= 0; i < count; i++) {
             const Point &p= positions[i];
             
@@ -700,7 +738,8 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     float radius= Distance(center, bmax);
     if(radius == 0.f) {
         os::log("can't get valid data from attribute '%s', vertex buffer object %d. failed.\n", 
-            &activeAttributes[id].name.front(), activeBuffers[id].buffer);
+            &activeAttributes[id].name.front(), activeBuffers[location].buffer);
+        glBindVertexArray(0);
         return false;
     }
     
@@ -725,6 +764,7 @@ bool drawAttribute( const int id, const DrawCall& drawParams ) {
     
     draw(drawParams);
     
+    glBindVertexArray(0);
     os::log("  done.\n");
     return true;
 }
@@ -908,8 +948,6 @@ bool drawFragmentStage( const DrawCall& drawParams ) {
         return true;
     }
     
-    //! \todo test color write mask
-    
     glClearColor( .05f, .05f, .05f, 1.f );
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
@@ -935,6 +973,7 @@ bool drawFragmentStage( const DrawCall& drawParams ) {
     }
     
     //! \todo import blend state from application context: or display the raw output from fragment shader before pixel tests/blend ?
+    //! \todo test color write mask ? same remark
     
     // draw
     draw(drawParams);
@@ -1070,8 +1109,9 @@ void pipelineView( trace::Call* call, std::ostream& os ) {
     glretrace::pipelineview::getActiveState();
 
     //retrace draw call
+    os::log("draw\n");
     draw(params);
-    
+
     // pipeline view
     if(!glretrace::pipelineview::initContext() || !glretrace::pipelineview::useContext()) {
         glretrace::pipelineview::restoreContext();
@@ -1088,20 +1128,29 @@ void pipelineView( trace::Call* call, std::ostream& os ) {
         return;
     }
     
-
     // draw stage
-    glretrace::pipelineview::drawAttribute(0, params);     // default attribute for now, need some gui work to choose another one
+    int location= 0;    // default attribute (location == 0) for now, need some gui work to choose another one
+    glretrace::pipelineview::drawAttribute(location, params);
+    //~ {glretrace::pipelineview::getActiveAttributes(); glretrace::pipelineview::getActiveBuffers();}
+    
     glretrace::pipelineview::drawVertexStage(params);
+    {glUseProgram(glretrace::pipelineview::activeProgram); glBindVertexArray(glretrace::pipelineview::activeVertexArray); glretrace::pipelineview::getActiveAttributes(); glretrace::pipelineview::getActiveBuffers();}
+    
     glretrace::pipelineview::drawGeometryStage(params);
+    //~ {glBindVertexArray(glretrace::pipelineview::activeVertexArray); glretrace::pipelineview::getActiveAttributes(); glretrace::pipelineview::getActiveBuffers();}
+    
     glretrace::pipelineview::drawCullingStage(params);
+    {glUseProgram(glretrace::pipelineview::activeProgram); glBindVertexArray(glretrace::pipelineview::activeVertexArray); glretrace::pipelineview::getActiveAttributes(); glretrace::pipelineview::getActiveBuffers();}
+    
     glretrace::pipelineview::drawFragmentStage(params);
-
+    {glUseProgram(glretrace::pipelineview::activeProgram); glBindVertexArray(glretrace::pipelineview::activeVertexArray); glretrace::pipelineview::getActiveAttributes(); glretrace::pipelineview::getActiveBuffers();}
+    
     glDisable(GL_SCISSOR_TEST);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, glretrace::pipelineview::framebuffer);
     glBlitFramebuffer(0, 0, 1280, 256, 0, 0, 1280, 256, GL_COLOR_BUFFER_BIT, GL_NEAREST);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-    
+
     {
         os::log("get snapshots\n");
         JSONWriter json(os);
